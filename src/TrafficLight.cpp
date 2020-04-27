@@ -1,5 +1,6 @@
 #include <iostream>
 #include <random>
+#include <future>
 #include "TrafficLight.h"
 
 /* Implementation of class "MessageQueue" */
@@ -23,7 +24,7 @@ void MessageQueue<T>::send(T &&msg)
 
 /* Implementation of class "TrafficLight" */
 
-/* 
+
 TrafficLight::TrafficLight()
 {
     _currentPhase = TrafficLightPhase::red;
@@ -44,6 +45,8 @@ TrafficLightPhase TrafficLight::getCurrentPhase()
 void TrafficLight::simulate()
 {
     // FP.2b : Finally, the private method „cycleThroughPhases“ should be started in a thread when the public method „simulate“ is called. To do this, use the thread queue in the base class. 
+
+    threads.emplace_back(std::thread(&TrafficLight::cycleThroughPhases, this)); 
 }
 
 // virtual function which is executed in a thread
@@ -53,6 +56,34 @@ void TrafficLight::cycleThroughPhases()
     // and toggles the current phase of the traffic light between red and green and sends an update method 
     // to the message queue using move semantics. The cycle duration should be a random value between 4 and 6 seconds. 
     // Also, the while-loop should use std::this_thread::sleep_for to wait 1ms between two cycles. 
-}
 
-*/
+    std::random_device rd;
+    std::mt19937 eng(rd());
+    std::uniform_int_distribution<> distr(4,6);
+
+    std::unique_lock<std::mutex> lck(_mutex);
+    std::cout << "Traffic Light #" << _id << " | thread_id = " << std::this_thread::get_id() << "\n";
+    lck.unlock();
+
+    long cycleDuration = distr(eng);
+
+    auto lastUpdate = std::chrono::system_clock::now();
+
+    while(true) 
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        
+        long timeSinceLastUpdate = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - lastUpdate).count();
+
+        if(timeSinceLastUpdate >= cycleDuration) 
+        {
+            if(_currentPhase == red)
+                _currentPhase = green;
+            else
+                _currentPhase = red;
+
+            lastUpdate = std::chrono::system_clock::now();
+            cycleDuration = distr(eng);
+        }
+    }
+}
